@@ -909,3 +909,75 @@ gh workflow run build-matrix.yml \
 diff -u <(sort reports/evidence/marble-12.4-stock-config.txt) \
         <(sort <artifact>/../.config)   # 只看与我们主动改动无关的差异
 ```
+
+---
+
+## 17. Phase 3 首次 CI 构建结果（2026-11-16 / Actions）
+
+### 17.1 运行清单
+
+| 运行 | 内容 | 结果 | 耗时 |
+|---|---|---|---|
+| [43593707498](https://github.com/wzk0/marble-kernel-builder/actions/runs/43593707498) r1 | `evolution-x` + `none` + 无 Droidspaces（S1：验证 pin/fragment/toolchain） | ✅ 全绿 | 20m11s（冷缓存） |
+| 43595529482 r2 | + KernelSU + Droidspaces | ❌ `Generate ccache key`：`resolved-refs.env: line 6: v3.3.1: command not found` | 6m |
+| 43596139436 r3 | 同上（修 tag 解析后） | ❌ 仅 release job：`release-metadata.env: line 8: 12.4: command not found` | ~25m |
+| 43600181056 r5 | 同上（修 quote 后） | ❌ 基础设施：`Setup swap for LTO` → `fallocate: No space left on device`（runner `/mnt` 过小） | 5m |
+| [43600732700](https://github.com/wzk0/marble-kernel-builder/actions/runs/43600732700) r6 | 同上（修 swap 后） | ✅ **全绿，Draft Release 已创建** | 11m05s（ccache + ThinLTO 全命中） |
+
+### 17.2 S1（纯内核）的 `.config` 对比 —— 决定性验收
+
+CI 产物 `config.txt`（7715 行）vs 真机 `/proc/config.gz`（7718 行）：**差异仅 27 行**，且全部可解释：
+
+| 差异 | 原因 | 是否影响 ABI |
+|---|---|---|
+| `CLANG/AS/LLD_VERSION`、`CC_VERSION_TEXT`、`CC_CAN_LINK*` | 我们用 llvm-22.1.8，官方用 r563880c | 否 |
+| `LTO_CLANG_FULL` ↔ `LTO_CLANG_THIN` | 免费 runner 安全选择 | 否 |
+| `UAPI_HEADER_TEST` 缺失 | Kconfig 可见性差异 | 否 |
+
+**关键项逐条一致**（=vermagic 与 KABI 基线正确）：`LOCALVERSION="-gki"`、`LOCALVERSION_AUTO=y`、`MODVERSIONS=y`、
+`CFI_CLANG=y`、`ARCH_WAIPIO=y`、`BUILD_ARM64_DT_OVERLAY=y`、`DEVTMPFS`、`NAMESPACES`、`PID_NS`、`SYSVIPC` 全部与真机同值。
+
+### 17.3 r6（KernelSU + Droidspaces）的 `.config` 对比
+
+与真机 config 的真正差异**只剩我们主动打开的东西**（19 行）：
+
+```
+CONFIG_KSU=y  (+ KSU_DEBUG / KSU_DISABLE_MANAGER / KSU_DISABLE_POLICY = n)
+CONFIG_SYSVIPC=y (+ SYSVIPC_SYSCTL / SYSVIPC_COMPAT)
+CONFIG_POSIX_MQUEUE=y (+ POSIX_MQUEUE_SYSCTL)
+CONFIG_IPC_NS=y      CONFIG_PID_NS=y      CONFIG_DEVTMPFS=y (+ DEVTMPFS_MOUNT=n)
+CONFIG_NETFILTER_XT_MATCH_ADDRTYPE=y
+```
+
+且 `CFS_BANDWIDTH` / `CGROUP_PIDS` 仍为 **not set**、`CFI_CLANG=y`、`MODVERSIONS=y`、`LOCALVERSION="-gki"` 保持不变
+→ 断言全部生效，kABI 未被破坏。r6 的 `config.txt` 与 r3 逐字节一致（`config_sha256=bb87924f…`）。
+
+### 17.4 Draft Release
+
+```
+tag      marble-evolution-x-12.4-droidspaces-r6
+title    Evolution-X 12.4 · kernelsu · Droidspaces · r6
+asset    AK3_marble_LOS_evolution-x_kernelsu-v3.3.1-code32680_r6.zip  (20.0 MB)
+状态      Draft（未发布）
+notes    含「ROM version 12.4 / Android 17 / cnb」「Kernel base 5.10.269-gki-g658b84f13496」
+         「Droidspaces Enabled · gki-5.10」三行，Cache 段已剥离
+```
+
+ZIP 审计：27 个条目，`Image` 被识别为 `Linux kernel ARM64 boot executable Image, little-endian, 4K pages`。
+
+### 17.5 本轮 CI 暴露并修掉的两个真实缺陷
+
+| 缺陷 | 触发条件 | 修法 |
+|---|---|---|
+| `resolve-refs.sh` 的 tag 解析用裸 `print`，`sub()` 改 `$2` 会重建 `$0` → `manager_tag=<sha> <tag>`，被 source 时报 `v3.3.1: command not found` | 把 KernelSU 从分支 `main` 改为 **tag `v3.3.1`** 才第一次触发（之前没有 tag 可解析） | 两个 awk 分支改为 `print $2` + 去空白兜底 + 静态回归断言 |
+| `release-metadata.env` 用 `%s` 写含空格的 title，release job `source` 时报 `12.4: command not found` | 首次真正走到 release job | 全部改 `printf %q` + 测试里真的 `source` 一遍并回读断言 |
+
+另修一处基础设施脆弱点：`Setup swap for LTO` 原来写死 16 GiB 且固定落在 `/mnt`（runner 上 `/mnt` 是独立小盘），
+改为探测 `/mnt` 与 `/`、按可用空间收缩、`fallocate` 失败回落 `dd`、最终失败只告警不中断。
+
+### 17.6 尚未验证（Phase 5，需用户授权刷机）
+
+- 真机开机、`uname -r` 是否等于 `5.10.269-gki-g658b84f13496`。
+- `dmesg` 中 vendor 模块是否加载（`disagrees about version of symbol` 应为空）。
+- KernelSU Manager 是否显示已安装/工作中、`su` 是否可用。
+- Droidspaces Requirements 自检是否全绿。
