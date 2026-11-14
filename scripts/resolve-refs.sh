@@ -57,12 +57,16 @@ if [[ "${MANAGER}" != "none" ]]; then
   # git ls-remote outputs both tag objects (no suffix) and dereferenced commits (^{} suffix).
   # We match the commit SHA against ^{} lines first (annotated tags), then plain lines (lightweight).
   all_tags="$(git ls-remote --tags "https://github.com/${manager_repo}.git" 2>/dev/null || true)"
+  # NOTE: sub() on $2 rebuilds $0, so these must print $2 — a bare `print` emits
+  # "<sha> <tag>" and corrupts release/resolved-refs.env for tag-pinned managers.
   manager_tag="$(echo "${all_tags}" | awk -v sha="${manager_commit}" \
-    '$1==sha && /\^\{\}$/ { sub(/.*refs\/tags\//, "", $2); sub(/\^\{\}/, "", $2); print; exit }')"
+    '$1==sha && /\^\{\}$/ { sub(/.*refs\/tags\//, "", $2); sub(/\^\{\}/, "", $2); print $2; exit }')"
   if [[ -z "${manager_tag}" ]]; then
     manager_tag="$(echo "${all_tags}" | awk -v sha="${manager_commit}" \
-      '$1==sha { sub(/.*refs\/tags\//, "", $2); print; exit }')"
+      '$1==sha { sub(/.*refs\/tags\//, "", $2); print $2; exit }')"
   fi
+  # Guard against any stray whitespace/newline leaking into a sourced env file.
+  manager_tag="${manager_tag%%[[:space:]]*}"
 fi
 
 if [[ "${ENABLE_SUSFS}" == "true" ]]; then

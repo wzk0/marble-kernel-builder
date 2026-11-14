@@ -498,4 +498,18 @@ if grep -Fq 'contents: write' "${core}"; then
   exit 1
 fi
 
+# ── resolve-refs.sh: tag parsing must not leak the SHA into manager_tag ──────
+# sub() on $2 rebuilds $0; a bare `print` emits "<sha> <tag>" and corrupts the
+# sourced release/resolved-refs.env (breaks ccache key + ZIP naming for
+# tag-pinned managers such as kernelsu@v3.3.1).
+if grep -nE "sub\(/\.\*refs" scripts/resolve-refs.sh | grep -vq 'print \$2'; then
+  echo "FAIL: resolve-refs.sh tag parsing must print \$2, not \$0" >&2
+  exit 1
+fi
+
+grep -Fq 'manager_tag="${manager_tag%%[[:space:]]*}"' scripts/resolve-refs.sh || {
+  echo "FAIL: resolve-refs.sh must strip whitespace from the resolved tag" >&2
+  exit 1
+}
+
 echo "Workflow policy tests passed"

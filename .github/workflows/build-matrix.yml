@@ -236,10 +236,18 @@ jobs:
           MATRIX_ARTIFACTS_DIR: matrix-artifacts
           MATRIX_SUMMARY: matrix-summary.md
         run: |
+          if [[ ! -d "${MATRIX_ARTIFACTS_DIR}" ]]; then
+            # Every build failed before uploading: keep this job green so the
+            # real failure stays the only red signal on the run.
+            echo "::warning::no build artifacts were produced; skipping the combined summary"
+            echo "### No build artifacts" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
           bash scripts/generate-matrix-summary.sh
           cat matrix-summary.md >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload combined summary
+        if: ${{ hashFiles('matrix-summary.md') != '' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: marble-matrix-summary-r${{ github.run_number }}
