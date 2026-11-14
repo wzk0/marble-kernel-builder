@@ -30,7 +30,9 @@ sanitize_token() {
   printf '%s' "$1" | sed -E 's/[^A-Za-z0-9._-]+/-/g; s/^-+//; s/-+$//'
 }
 
-case "${PACKAGE_FAMILY:-${ROM_FAMILY:-${KERNEL_SOURCE}}}" in
+# Explicit caller values win over anything sourced from a (possibly stale)
+# release/kernel-source.env. Precedence: PACKAGE_FAMILY > ROM_FAMILY > env file > source id.
+case "${_caller_pkg:-${_caller_rom:-${PACKAGE_FAMILY:-${ROM_FAMILY:-${KERNEL_SOURCE}}}}}" in
   LOS|los|lineageos|evolution-x|aosp-pablo|pa-gr) PACKAGE_FAMILY="LOS" ;;
   *) PACKAGE_FAMILY="MELT" ;;
 esac
@@ -86,6 +88,10 @@ generate_banner_text() {
   family="${PACKAGE_FAMILY}"
   source_line="${KERNEL_SOURCE:-melt}"
   lto_line="${LTO:-thin}"
+  if [[ -n "${EVOLUTION_X_VERSION:-}" ]]; then
+    source_line+=" · Evolution X ${EVOLUTION_X_VERSION}"
+    [[ -n "${EVOLUTION_X_ANDROID:-}" ]] && source_line+=" (Android ${EVOLUTION_X_ANDROID})"
+  fi
 
   if [[ "${MANAGER}" == "none" ]]; then
     manager_line="noroot"

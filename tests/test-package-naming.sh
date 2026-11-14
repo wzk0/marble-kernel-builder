@@ -55,4 +55,30 @@ assert_name \
   manager_build_version_code=33203 manager_commit=66656dd123456789 \
   susfs_reported_version=v2.2.0
 
+# Explicit caller PACKAGE_FAMILY/ROM_FAMILY must beat a stale release/kernel-source.env
+# (regression: package-anykernel.sh used to keep the sourced value).
+mkdir -p release
+cat > release/kernel-source.env <<'ENV'
+KERNEL_SOURCE=lineageos
+ROM_FAMILY=los
+PACKAGE_FAMILY=LOS
+ENV
+trap 'rm -rf release' EXIT
+
+assert_name \
+  'AK3_marble_MELT_melt_noroot_r9.zip' \
+  KERNEL_SOURCE=melt ROM_FAMILY=hyperos \
+  MANAGER=none ENABLE_SUSFS=false
+
+assert_name \
+  'AK3_marble_LOS_lineageos_noroot_r9.zip' \
+  KERNEL_SOURCE=lineageos ROM_FAMILY=los \
+  MANAGER=none ENABLE_SUSFS=false
+
+# PACKAGE_FAMILY itself wins over ROM_FAMILY when both are given
+assert_name \
+  'AK3_marble_LOS_melt_noroot_r9.zip' \
+  KERNEL_SOURCE=melt ROM_FAMILY=hyperos PACKAGE_FAMILY=los \
+  MANAGER=none ENABLE_SUSFS=false
+
 echo "Package naming tests passed"
