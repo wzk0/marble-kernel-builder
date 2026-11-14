@@ -59,6 +59,12 @@ android_clang_commit="$(get_info android_clang_commit)"
 lto_mode="$(get_info lto)"
 lto_mode="${lto_mode:-thin}"
 toolchain_id="$(get_info toolchain)"
+evolution_x_version="$(get_info evolution_x_version)"
+evolution_x_android="$(get_info evolution_x_android)"
+kernel_version_label="$(get_info kernel_version_label)"
+kernel_release_suffix="$(get_info kernel_release_suffix)"
+droidspaces_enabled="$(get_info droidspaces_enabled)"
+droidspaces_profile="$(get_info droidspaces_profile)"
 ccache_hit="$(get_info ccache_hit)"
 thinlto_cache_hit="$(get_info thinlto_cache_hit)"
 package_family="$(get_info package_family)"
@@ -153,7 +159,19 @@ build_badge_url="https://img.shields.io/badge/Build-Passing-2088FF?style=for-the
       echo "| 👤 **Kernel Source** | **${_ks_label}** (\`${_ks_id}\`) |"
     fi
   fi
-  echo "| 🧬 **Kernel Base** | \`android12-5.10\` |"
+  if [[ -n "${evolution_x_version}" ]]; then
+    echo "| 🟣 **ROM Version** | **Evolution X ${evolution_x_version}** · Android ${evolution_x_android:-?} |"
+  fi
+  if [[ -n "${kernel_version_label}" || -n "${kernel_release_suffix}" ]]; then
+    echo "| 🧬 **Kernel Base** | \`${kernel_version_label:-unknown}${kernel_release_suffix}\` |"
+  else
+    echo "| 🧬 **Kernel Base** | \`android12-5.10\` |"
+  fi
+  if [[ "${droidspaces_enabled}" == "true" ]]; then
+    echo "| 🧊 **Droidspaces** | Enabled · \`${droidspaces_profile:-gki}\` |"
+  else
+    echo "| 🧊 **Droidspaces** | Disabled |"
+  fi
   echo "| 🛠️ **Build Scope** | \`${BUILD_SCOPE}\` |"
   if [[ -n "${package_family}" ]]; then
     echo "| 🏷️ **Package Family** | \`${package_family}\` |"

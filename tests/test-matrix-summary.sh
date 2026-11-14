@@ -59,6 +59,13 @@ manager_supported_line=
 enable_susfs=true
 susfs_version=v2.2.0
 susfs_kernel_branch=gki-android12-5.10
+evolution_x_version=12.4
+evolution_x_android=17
+evolution_x_manifest_branch=cnb
+kernel_version_label=5.10.269
+kernel_release_suffix=-gki-g658b84f13496
+droidspaces_enabled=true
+droidspaces_profile=gki-5.10
 susfs_ref=4003ecf2d01c6d13fa8edf6c4f2607365738dc3d
 susfs_commit=4003ecf2d01c6d13fa8edf6c4f2607365738dc3d
 susfs_reported_version=v2.2.0
@@ -96,6 +103,9 @@ required_patterns=(
   '\| .*LTO.* \| `thin` \|'
   '\| .*Toolchain.* \| `android-r416183b` \|'
   '\| .*Package family.* \| `MELT` \|'
+  '\| .*ROM version.* \| \*\*Evolution X 12\.4\*\* · Android 17 · `cnb` \|'
+  '\| .*Kernel base.* \| `5\.10\.269-gki-g658b84f13496` \|'
+  '\| .*Droidspaces.* \| Enabled · `gki-5\.10`'
   'badge/LTO-thin'
   '^## .*Cache$'
   'marble-ci-cache-start'

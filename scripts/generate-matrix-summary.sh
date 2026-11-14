@@ -118,6 +118,13 @@ kernel_source_author="$(get_info "${first_info}" kernel_source_author)"
 rom_support="$(get_info "${first_info}" rom_support)"
 quality_label="$(get_info "${first_info}" quality_label)"
 defconfig="$(get_info "${first_info}" defconfig)"
+evolution_x_version="$(get_info "${first_info}" evolution_x_version)"
+evolution_x_android="$(get_info "${first_info}" evolution_x_android)"
+evolution_x_manifest_branch="$(get_info "${first_info}" evolution_x_manifest_branch)"
+kernel_version_label="$(get_info "${first_info}" kernel_version_label)"
+kernel_release_suffix="$(get_info "${first_info}" kernel_release_suffix)"
+droidspaces_enabled="$(get_info "${first_info}" droidspaces_enabled)"
+droidspaces_profile="$(get_info "${first_info}" droidspaces_profile)"
 defconfig_mode="$(get_info "${first_info}" defconfig_mode)"
 base_defconfig="$(get_info "${first_info}" base_defconfig)"
 runner_image_os="$(get_info "${first_info}" runner_image_os)"
@@ -315,7 +322,14 @@ lto_badge_url="https://img.shields.io/badge/LTO-$(badge_encode "${lto_mode}")-9C
     fi
   fi
   echo "| 📦 **Source** | [\`${source_ref} @ $(short_commit "${source_commit}")\`](https://github.com/${source_repo}/commit/${source_commit}) |"
-  echo "| 🧬 **Kernel base** | \`android12-5.10\` |"
+  if [[ -n "${evolution_x_version}" ]]; then
+    echo "| 🟣 **ROM version** | **Evolution X ${evolution_x_version}** · Android ${evolution_x_android:-?} · \`${evolution_x_manifest_branch:-?}\` |"
+  fi
+  if [[ -n "${kernel_version_label}" || -n "${kernel_release_suffix}" ]]; then
+    echo "| 🧬 **Kernel base** | \`${kernel_version_label:-unknown}${kernel_release_suffix}\` |"
+  else
+    echo "| 🧬 **Kernel base** | \`android12-5.10\` |"
+  fi
   if [[ -n "${defconfig}" ]]; then
     if [[ -n "${defconfig_mode}" ]]; then
       echo "| 🧾 **Defconfig** | \`${defconfig}\` · mode \`${defconfig_mode}\` |"
@@ -336,6 +350,11 @@ lto_badge_url="https://img.shields.io/badge/LTO-$(badge_encode "${lto_mode}")-9C
   echo "| 🔨 **Compiler** | \`${android_clang_version:-clang-r416183b}\` |"
   if [[ -n "${android_clang_commit}" ]]; then
     echo "| 🧷 **Compiler commit** | \`$(short_commit "${android_clang_commit}")\` |"
+  fi
+  if [[ "${droidspaces_enabled}" == "true" ]]; then
+    echo "| 🧊 **Droidspaces** | Enabled · \`${droidspaces_profile:-gki}\` · SYSVIPC + IPC/PID namespaces + devtmpfs |"
+  else
+    echo "| 🧊 **Droidspaces** | Disabled |"
   fi
   if [[ "${enable_susfs_first}" == "true" && -n "${susfs_display}" ]]; then
     echo "| 🛡️ **SUSFS** | \`${susfs_display}\` · \`${susfs_branch}\` · [\`$(short_commit "${susfs_commit}")\`](${susfs_url}) |"
