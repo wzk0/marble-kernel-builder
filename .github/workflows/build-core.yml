@@ -161,11 +161,59 @@ jobs:
           fi
           df -h /
 
+      # Sizing the swap file has to survive runners that report plenty of free
+      # space on / but hand out a small /mnt (observed: fallocate 16G => ENOSPC on
+      # a runner with 88 GiB free). Pick a filesystem that can actually hold it,
+      # shrink the file when needed, and never fail the build over swap.
       - name: Setup swap for LTO
         if: ${{ inputs.lto != 'none' }}
-        uses: pierotofy/set-swap-space@49819abfb41bd9b44fb781159c033dba90353a7c # v1.0
-        with:
-          swap-size-gb: 16
+        run: |
+          set -uo pipefail
+          swapdir=""
+          for candidate in /mnt /; do
+            [[ -d "${candidate}" ]] || continue
+            avail="$(df --output=avail -BG "${candidate}" | tail -n1 | tr -dc '0-9')"
+            echo "${candidate}: ${avail} GiB free"
+            if (( avail > 8 )); then
+              swapdir="${candidate}"
+              break
+            fi
+          done
+          if [[ -z "${swapdir}" ]]; then
+            echo "::warning::no filesystem has room for a swap file; continuing without swap"
+            exit 0
+          fi
+
+          avail="$(df --output=avail -BG "${swapdir}" | tail -n1 | tr -dc '0-9')"
+          want=16
+          if (( want > avail - 4 )); then
+            want=$(( avail - 4 ))
+          fi
+          if (( want < 4 )); then
+            echo "::warning::only ${avail} GiB free on ${swapdir}; skipping swap"
+            exit 0
+          fi
+
+          swapfile="${swapdir%/}/swapfile-marble"
+          echo "Creating ${want} GiB swap at ${swapfile}"
+          sudo rm -f "${swapfile}"
+          if ! sudo fallocate -l "${want}G" "${swapfile}"; then
+            echo "fallocate failed; falling back to dd"
+            sudo rm -f "${swapfile}"
+            if ! sudo dd if=/dev/zero of="${swapfile}" bs=1M count=$(( want * 1024 )) status=none; then
+              echo "::warning::could not allocate ${want} GiB of swap; continuing without it"
+              sudo rm -f "${swapfile}"
+              exit 0
+            fi
+          fi
+          sudo chmod 600 "${swapfile}"
+          sudo mkswap "${swapfile}" >/dev/null
+          if ! sudo swapon "${swapfile}"; then
+            echo "::warning::swapon failed; continuing without swap"
+            sudo rm -f "${swapfile}"
+            exit 0
+          fi
+          free -g || true
 
       - name: Install build dependencies
         run: |
