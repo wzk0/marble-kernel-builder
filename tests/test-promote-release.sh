@@ -148,8 +148,18 @@ grep -qx 'release_droidspaces=false' "${tmp_dir}/release-metadata.env" \
   || { echo "FAIL: droidspaces flag wrong" >&2; exit 1; }
 grep -qx 'release_tag=marble-evolution-x-12.4-r9' "${tmp_dir}/release-metadata.env" \
   || { echo "FAIL: tag must not be marble-auto-* (got: $(grep release_tag= "${tmp_dir}/release-metadata.env"))" >&2; exit 1; }
-grep -qx 'release_title=Evolution-X 12.4 · kernelsu-next + resukisu · r9' "${tmp_dir}/release-metadata.env" \
-  || { echo "FAIL: title mismatch (got: $(grep release_title= "${tmp_dir}/release-metadata.env"))" >&2; exit 1; }
+# The file is `source`d by the release job, so it must be shell-safe: titles
+# contain spaces and a middle dot.
+( set -euo pipefail
+  # shellcheck disable=SC1091
+  source "${tmp_dir}/release-metadata.env"
+  [[ "${release_title}" == 'Evolution-X 12.4 · kernelsu-next + resukisu · r9' ]] || {
+    echo "FAIL: sourced release_title mismatch: ${release_title}" >&2; exit 1; }
+  [[ "${release_tag}" == 'marble-evolution-x-12.4-r9' ]] || {
+    echo "FAIL: sourced release_tag mismatch: ${release_tag}" >&2; exit 1; }
+  [[ "${release_droidspaces}" == 'false' ]] || {
+    echo "FAIL: sourced release_droidspaces mismatch" >&2; exit 1; }
+)
 
 # Mixed kernel_source across artifacts must block promotion.
 mixed_dir="${tmp_dir}/mixed-source"

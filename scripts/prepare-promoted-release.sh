@@ -223,15 +223,17 @@ title+=" · ${manager_label}"
 [[ "${release_droidspaces}" == "true" ]] && title+=" · Droidspaces"
 [[ -n "${SOURCE_RUN_NUMBER}" ]] && title+=" · r${SOURCE_RUN_NUMBER}"
 
+# %q: the workflow `source`s this file, so values with spaces (release_title)
+# must be shell-quoted or sourcing tries to execute their second word.
 {
-  printf 'release_kernel_source=%s\n' "${release_kernel_source}"
-  printf 'release_kernel_slug=%s\n' "${release_kernel_slug}"
-  printf 'release_rom_version=%s\n' "${release_rom_version}"
-  printf 'release_droidspaces=%s\n' "${release_droidspaces}"
-  printf 'release_manager_label=%s\n' "${manager_label}"
-  printf 'release_display=%s\n' "${display}"
-  printf 'release_tag=%s\n' "${tag_base}"
-  printf 'release_title=%s\n' "${title}"
+  printf 'release_kernel_source=%q\n' "${release_kernel_source}"
+  printf 'release_kernel_slug=%q\n' "${release_kernel_slug}"
+  printf 'release_rom_version=%q\n' "${release_rom_version}"
+  printf 'release_droidspaces=%q\n' "${release_droidspaces}"
+  printf 'release_manager_label=%q\n' "${manager_label}"
+  printf 'release_display=%q\n' "${display}"
+  printf 'release_tag=%q\n' "${tag_base}"
+  printf 'release_title=%q\n' "${title}"
 } > "${RELEASE_METADATA_FILE}"
 
 echo "Prepared $(wc -l < "${RELEASE_ASSETS_FILE}") verified release ZIP(s)"
