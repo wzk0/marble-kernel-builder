@@ -29,6 +29,8 @@ evolution_x_android=17
 evolution_x_manifest_branch=cnb
 droidspaces_enabled=${DROIDSPACES_ENABLED:-false}
 droidspaces_profile=gki-5.10
+droidspaces_patches_version=v7.2.0
+manager_tag=${manager_tag:-v9.9.9}
 source_commit=3673961d444b5e2b879be97a161241243d543bd2
 workflow_run=https://github.com/mohdakil2426/marble-kernel-builder/actions/runs/123
 android_clang_version=clang-r416183b
@@ -146,16 +148,16 @@ grep -qx 'release_rom_version=12.4' "${tmp_dir}/release-metadata.env" \
   || { echo "FAIL: rom version missing from release identity" >&2; exit 1; }
 grep -qx 'release_droidspaces=false' "${tmp_dir}/release-metadata.env" \
   || { echo "FAIL: droidspaces flag wrong" >&2; exit 1; }
-grep -qx 'release_tag=marble-evolution-x-12.4-r9' "${tmp_dir}/release-metadata.env" \
-  || { echo "FAIL: tag must not be marble-auto-* (got: $(grep release_tag= "${tmp_dir}/release-metadata.env"))" >&2; exit 1; }
+grep -qx 'release_tag=marble-evolution-x-12.4-multi-r9' "${tmp_dir}/release-metadata.env" \
+  || { echo "FAIL: multi-manager tag must be -multi (got: $(grep release_tag= "${tmp_dir}/release-metadata.env"))" >&2; exit 1; }
 # The file is `source`d by the release job, so it must be shell-safe: titles
 # contain spaces and a middle dot.
 ( set -euo pipefail
   # shellcheck disable=SC1091
   source "${tmp_dir}/release-metadata.env"
-  [[ "${release_title}" == 'Evolution-X 12.4 · kernelsu-next + resukisu · r9' ]] || {
+  [[ "${release_title}" == 'Evolution-X 12.4 · KernelSU-Next v1.0.0 + ReSukiSU v1.0.0 · r9' ]] || {
     echo "FAIL: sourced release_title mismatch: ${release_title}" >&2; exit 1; }
-  [[ "${release_tag}" == 'marble-evolution-x-12.4-r9' ]] || {
+  [[ "${release_tag}" == 'marble-evolution-x-12.4-multi-r9' ]] || {
     echo "FAIL: sourced release_tag mismatch: ${release_tag}" >&2; exit 1; }
   [[ "${release_droidspaces}" == 'false' ]] || {
     echo "FAIL: sourced release_droidspaces mismatch" >&2; exit 1; }
@@ -179,5 +181,26 @@ if MATRIX_ARTIFACTS_DIR="${mixed_dir}" MATRIX_SUMMARY="${tmp_dir}/mixed.md" \
   echo "FAIL: mixed kernel_source artifacts must block promotion" >&2
   exit 1
 fi
+
+# Single manager + Droidspaces: tag/title must carry all three versions.
+single_ds="${tmp_dir}/single-ds"
+DROIDSPACES_ENABLED=true make_artifact "${single_ds}" marble-flash-kernelsu-image-only-r9 kernelsu \
+  AK3_marble_LOS_evolution-x_kernelsu-v3.3.1-code32680_r9.zip
+MATRIX_ARTIFACTS_DIR="${single_ds}" \
+MATRIX_SUMMARY="${tmp_dir}/single-ds.md" \
+RELEASE_ASSETS_FILE="${tmp_dir}/single-ds-assets.txt" \
+RELEASE_METADATA_FILE="${tmp_dir}/single-ds-metadata.env" \
+SOURCE_RUN_NUMBER=9 BUILD_SCOPE=image-only \
+  bash scripts/prepare-promoted-release.sh >/dev/null
+( set -euo pipefail
+  # shellcheck disable=SC1091
+  source "${tmp_dir}/single-ds-metadata.env"
+  [[ "${release_tag}" == "marble-evolution-x-12.4-kernelsu-v1.0.0-droidspaces-v7.2.0-r9" ]] || {
+    echo "FAIL: single-manager tag must include rom+manager+droidspaces versions (got ${release_tag})" >&2; exit 1; }
+  [[ "${release_title}" == "Evolution-X 12.4 · KernelSU v1.0.0 · Droidspaces v7.2.0 · r9" ]] || {
+    echo "FAIL: single-manager title mismatch (got ${release_title})" >&2; exit 1; }
+  [[ "${release_droidspaces_version}" == "v7.2.0" ]] || {
+    echo "FAIL: droidspaces version not recorded" >&2; exit 1; }
+)
 
 echo "Promoted release tests passed"

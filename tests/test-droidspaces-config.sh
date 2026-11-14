@@ -38,6 +38,9 @@ grep -q 'ANDROID_KABI_USE(6, struct sysv_sem sysvsem)' \
   "${pdir}/001.GKI-below-6.12-fix_sysvipc_kabi_6_7_8.patch" \
   || fail "SYSVIPC patch must use KABI slot 6"
 
+grep -q 'v7\.2\.0' "${pdir}/README.md" \
+  || fail "patch README must record the Droidspaces baseline version"
+
 # ── Preset wiring ────────────────────────────────────────────────────────────
 "${PYTHON}" - <<'PY'
 import json
@@ -52,6 +55,8 @@ refs = sp.get("match_refs") or []
 assert "cnb" in refs, "match_refs must accept the branch label"
 assert any(len(r) == 40 for r in refs), "match_refs must accept the pinned commit"
 assert presets["evolution-x"].get("version_map") is True
+assert sp.get("version") == "v7.2.0", "source_patches.version must record the upstream baseline"
+assert len(sp.get("version_commit") or "") == 40, "version_commit must be a full sha"
 print("preset wiring ok")
 PY
 

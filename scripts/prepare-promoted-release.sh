@@ -35,6 +35,7 @@ detected_scope=""
 
 # Release identity collected from build-info.txt of every verified artifact.
 declare -A seen_kernel_source=() seen_rom_version=() seen_droidspaces=()
+declare -A seen_ds_version=() manager_version=()
 manager_order=()
 
 for artifact_dir in "${artifact_dirs[@]}"; do
@@ -120,7 +121,20 @@ for artifact_dir in "${artifact_dirs[@]}"; do
       *" ${mgr} "*) ;;
       *) manager_order+=("${mgr}") ;;
     esac
+    # First non-empty human version wins: build log name > build log tag > pin tag > commit.
+    if [[ -z "${manager_version[${mgr}]:-}" ]]; then
+      mv="$(info_field manager_build_version_name)"
+      [[ -z "${mv}" ]] && mv="$(info_field manager_build_tag)"
+      [[ -z "${mv}" ]] && mv="$(info_field manager_tag)"
+      if [[ -z "${mv}" ]]; then
+        mv="$(info_field manager_commit)"
+        [[ -n "${mv}" ]] && mv="${mv:0:7}"
+      fi
+      manager_version["${mgr}"]="${mv}"
+    fi
   fi
+  dsv="$(info_field droidspaces_patches_version)"
+  [[ -n "${dsv}" ]] && seen_ds_version["${dsv}"]=1
 
   echo "${zip_name}: OK"
   realpath "${zip_path}" >> "${assets_tmp}"
@@ -178,8 +192,25 @@ elif [[ "${#seen_droidspaces[@]}" -gt 1 ]]; then
   echo "::error::Artifacts disagree on droidspaces_enabled"
   exit 1
 fi
+if [[ "${#seen_ds_version[@]}" -gt 1 ]]; then
+  echo "::error::Artifacts disagree on droidspaces_patches_version"
+  exit 1
+fi
+release_ds_version=""
+[[ "${#seen_ds_version[@]}" -eq 1 ]] && release_ds_version="${!seen_ds_version[*]}"
 
 slugify() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9._-]+/-/g; s/^-+//; s/-+$//'; }
+
+manager_display_name() {
+  case "$1" in
+    none)          printf 'No root' ;;
+    kernelsu)      printf 'KernelSU' ;;
+    kernelsu-next) printf 'KernelSU-Next' ;;
+    sukisu-ultra)  printf 'SukiSU Ultra' ;;
+    resukisu)      printf 'ReSukiSU' ;;
+    *)             printf '%s' "$1" ;;
+  esac
+}
 
 release_kernel_slug="$(slugify "${release_kernel_source}")"
 [[ -n "${release_kernel_slug}" ]] || release_kernel_slug="unknown"
@@ -194,9 +225,26 @@ if [[ -z "${RELEASE_METADATA_FILE:-}" ]]; then
   fi
 fi
 
+# ── Identity string: ROM + manager(+version) + Droidspaces(+version) ─────────
+single_manager=""
+if [[ "${#manager_order[@]}" -eq 1 ]]; then
+  single_manager="${manager_order[0]}"
+fi
+single_manager_version=""
+[[ -n "${single_manager}" ]] && single_manager_version="${manager_version[${single_manager}]:-}"
+
 tag_base="marble-${release_kernel_slug}"
 [[ -n "${release_rom_slug}" ]] && tag_base+="-${release_rom_slug}"
-[[ "${release_droidspaces}" == "true" ]] && tag_base+="-droidspaces"
+if [[ -n "${single_manager}" && "${single_manager}" != "none" ]]; then
+  tag_base+="-$(slugify "${single_manager}")"
+  [[ -n "${single_manager_version}" ]] && tag_base+="-$(slugify "${single_manager_version}")"
+elif [[ "${#manager_order[@]}" -gt 1 ]]; then
+  tag_base+="-multi"
+fi
+if [[ "${release_droidspaces}" == "true" ]]; then
+  tag_base+="-droidspaces"
+  [[ -n "${release_ds_version}" ]] && tag_base+="-$(slugify "${release_ds_version}")"
+fi
 [[ -n "${SOURCE_RUN_NUMBER}" ]] && tag_base+="-r${SOURCE_RUN_NUMBER}"
 
 display="$(python3 - "${release_kernel_source}" <<'PY' 2>/dev/null || true
@@ -213,14 +261,18 @@ PY
 manager_label=""
 for mgr in "${manager_order[@]}"; do
   [[ -n "${manager_label}" ]] && manager_label+=" + "
-  manager_label+="${mgr}"
+  manager_label+="$(manager_display_name "${mgr}")"
+  [[ -n "${manager_version[${mgr}]:-}" ]] && manager_label+=" ${manager_version[${mgr}]}"
 done
 [[ -n "${manager_label}" ]] || manager_label="unknown"
 
 title="${display}"
 [[ -n "${release_rom_version}" ]] && title+=" ${release_rom_version}"
 title+=" · ${manager_label}"
-[[ "${release_droidspaces}" == "true" ]] && title+=" · Droidspaces"
+if [[ "${release_droidspaces}" == "true" ]]; then
+  title+=" · Droidspaces"
+  [[ -n "${release_ds_version}" ]] && title+=" ${release_ds_version}"
+fi
 [[ -n "${SOURCE_RUN_NUMBER}" ]] && title+=" · r${SOURCE_RUN_NUMBER}"
 
 # %q: the workflow `source`s this file, so values with spaces (release_title)
@@ -230,6 +282,7 @@ title+=" · ${manager_label}"
   printf 'release_kernel_slug=%q\n' "${release_kernel_slug}"
   printf 'release_rom_version=%q\n' "${release_rom_version}"
   printf 'release_droidspaces=%q\n' "${release_droidspaces}"
+  printf 'release_droidspaces_version=%q\n' "${release_ds_version}"
   printf 'release_manager_label=%q\n' "${manager_label}"
   printf 'release_display=%q\n' "${display}"
   printf 'release_tag=%q\n' "${tag_base}"

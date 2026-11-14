@@ -70,6 +70,7 @@ data = {
         "enabled": info.get("droidspaces_enabled", "false") == "true",
         "profile": info.get("droidspaces_profile", ""),
         "patch_dir": info.get("droidspaces_patch_dir", ""),
+        "patch_version": info.get("droidspaces_patches_version", ""),
     },
     "compiler": {
         "android_clang_version": info.get("android_clang_version", ""),

@@ -7,8 +7,9 @@ kernel tree changes, re-verify with `git apply --check` and replace the files.
 |---|---|
 | Source repo | https://github.com/ravindu644/Droidspaces-OSS |
 | Source path | `Documentation/resources/kernel-patches/GKI/below-kernel-6.12/` |
-| Fetched from | branch `main` |
+| Fetched from | branch `main`, later verified byte-identical to tag **`v7.2.0`** (`cdadb9eb5d0f…`) |
 | Fetched on | 2026-11-16 |
+| Upstream version | **Droidspaces v7.2.0** (recorded in `config/kernel-sources.json` as `source_patches.version`) |
 
 ## Files
 

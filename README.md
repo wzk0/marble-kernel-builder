@@ -389,9 +389,18 @@ release job 要求**每个**构建和合并摘要都成功。tag/title 由 `prep
 因为 `kernel_source` 输入的默认值是 `auto`：
 
 ```
-tag    marble-<source>[-<rom版本>][-droidspaces]-r<run>    例：marble-evolution-x-12.4-droidspaces-r6
-title  <Display> <rom版本> · <manager>[ · Droidspaces] · r<run>
+tag    marble-<source>-<rom版本>[-<manager>-<manager版本>][-droidspaces[-<DS版本>]]-r<run>
+title  <Display> <rom版本> · <Manager> <manager版本>[ · Droidspaces <DS版本>] · r<run>
 ```
+
+实际例子（本仓库已发布的那一版）：
+
+```
+tag    marble-evolution-x-12.4-kernelsu-v3.3.1-droidspaces-v7.2.0-r6
+title  Evolution-X 12.4 · KernelSU v3.3.1 · Droidspaces v7.2.0 · r6
+```
+
+三样版本号都进 tag；多管理器并行构建时中间段退化为 `-multi`（避免 tag 里出现 `+`）。
 
 - 资产**只有 ZIP**；校验值、元数据留在 Actions artifact 里。
 - 附件前会重新校验 SHA256。

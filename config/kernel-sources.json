@@ -57,7 +57,9 @@
         "658b84f13496fa94659905e5f29b31cfde41d0ce"
       ],
       "requires_env": "ENABLE_DROIDSPACES",
-      "notes": "Droidspaces GKI kABI padding patches (SYSVIPC + POSIX_MQUEUE). Applied only when ENABLE_DROIDSPACES=true. Verbatim from ravindu644/Droidspaces-OSS; re-verify with git apply --check when the kernel commit changes."
+      "notes": "Droidspaces GKI kABI padding patches (SYSVIPC + POSIX_MQUEUE). Applied only when ENABLE_DROIDSPACES=true. Verbatim from ravindu644/Droidspaces-OSS; re-verify with git apply --check when the kernel commit changes. Kernel-patch baseline: Droidspaces v7.2.0 (both files verified byte-identical to that tag).",
+      "version": "v7.2.0",
+      "version_commit": "cdadb9eb5d0f86aacffff60776333e6f6b73a30a"
     }
   },
   "aosp-pablo": {

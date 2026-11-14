@@ -124,7 +124,11 @@ gh workflow run build-matrix.yml \
 ```
 
 产物：`AK3_marble_LOS_evolution-x_kernelsu-v3.3.1-code32680_rN.zip`
-Draft tag：`marble-evolution-x-12.4-droidspaces-rN`，title：`Evolution-X 12.4 · kernelsu · Droidspaces · rN`
+Draft tag：`marble-evolution-x-12.4-kernelsu-v3.3.1-droidspaces-v7.2.0-rN`
+title：`Evolution-X 12.4 · KernelSU v3.3.1 · Droidspaces v7.2.0 · rN`
+
+Release 身份**全部从 artifact 的 build-info 派生**（ROM 版本 / manager 版本 / Droidspaces 补丁基线版本 / run 号），
+不取工作流输入。多管理器时 tag 中间段退化为 `-multi`。
 
 ---
 

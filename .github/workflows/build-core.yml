@@ -443,6 +443,7 @@ jobs:
             echo "droidspaces_enabled=${ENABLE_DROIDSPACES:-false}"
             echo "droidspaces_profile=${DROIDSPACES_PROFILE:-}"
             echo "droidspaces_patch_dir=$(jq -r --arg s "${KERNEL_SOURCE}" '.[$s].source_patches.dir // empty' config/kernel-sources.json)"
+            echo "droidspaces_patches_version=$(jq -r --arg s "${KERNEL_SOURCE}" '.[$s].source_patches.version // empty' config/kernel-sources.json)"
             echo "official_toolchain=${OFFICIAL_TOOLCHAIN:-}"
             echo "workflow_run=${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
             echo "runner_image_os=${ImageOS:-unknown}"
