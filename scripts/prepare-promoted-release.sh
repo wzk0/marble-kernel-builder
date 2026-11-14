@@ -33,6 +33,10 @@ assets_tmp="$(mktemp)"
 trap 'rm -f "${assets_tmp}"' EXIT
 detected_scope=""
 
+# Release identity collected from build-info.txt of every verified artifact.
+declare -A seen_kernel_source=() seen_rom_version=() seen_droidspaces=()
+manager_order=()
+
 for artifact_dir in "${artifact_dirs[@]}"; do
   artifact_name="$(basename "${artifact_dir}")"
   if [[ ! "${artifact_name}" =~ -(image-only|full)-r[0-9]+$ ]]; then
@@ -103,6 +107,21 @@ for artifact_dir in "${artifact_dirs[@]}"; do
     echo "::error::Checksum mismatch for ${zip_name}"
     exit 1
   fi
+  info_field() { sed -n "s/^$1=//p" "${artifact_dir}/build-info.txt" | head -n1; }
+  src="$(info_field kernel_source)"
+  [[ -n "${src}" ]] && seen_kernel_source["${src}"]=1
+  rom="$(info_field evolution_x_version)"
+  [[ -n "${rom}" ]] && seen_rom_version["${rom}"]=1
+  ds="$(info_field droidspaces_enabled)"
+  [[ -n "${ds}" ]] && seen_droidspaces["${ds}"]=1
+  mgr="$(info_field manager)"
+  if [[ -n "${mgr}" ]]; then
+    case " ${manager_order[*]-} " in
+      *" ${mgr} "*) ;;
+      *) manager_order+=("${mgr}") ;;
+    esac
+  fi
+
   echo "${zip_name}: OK"
   realpath "${zip_path}" >> "${assets_tmp}"
 done
@@ -136,5 +155,86 @@ fi
 
 mv "${assets_tmp}" "${RELEASE_ASSETS_FILE}"
 trap - EXIT
+
+# ── Release identity ─────────────────────────────────────────────────────────
+# Derived from the artifacts themselves, never from a workflow input: the
+# matrix `kernel_source` input defaults to `auto`, which used to produce tags
+# like marble-auto-r123.
+if [[ "${#seen_kernel_source[@]}" -ne 1 ]]; then
+  echo "::error::Artifacts disagree on kernel_source; refusing to build a release identity"
+  exit 1
+fi
+release_kernel_source="${!seen_kernel_source[*]}"
+if [[ "${#seen_rom_version[@]}" -gt 1 ]]; then
+  echo "::error::Artifacts disagree on evolution_x_version"
+  exit 1
+fi
+release_rom_version=""
+[[ "${#seen_rom_version[@]}" -eq 1 ]] && release_rom_version="${!seen_rom_version[*]}"
+release_droidspaces="false"
+if [[ "${#seen_droidspaces[@]}" -eq 1 && "${!seen_droidspaces[*]}" == "true" ]]; then
+  release_droidspaces="true"
+elif [[ "${#seen_droidspaces[@]}" -gt 1 ]]; then
+  echo "::error::Artifacts disagree on droidspaces_enabled"
+  exit 1
+fi
+
+slugify() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9._-]+/-/g; s/^-+//; s/-+$//'; }
+
+release_kernel_slug="$(slugify "${release_kernel_source}")"
+[[ -n "${release_kernel_slug}" ]] || release_kernel_slug="unknown"
+release_rom_slug=""
+[[ -n "${release_rom_version}" ]] && release_rom_slug="$(slugify "${release_rom_version}")"
+
+if [[ -z "${RELEASE_METADATA_FILE:-}" ]]; then
+  if [[ "${RELEASE_ASSETS_FILE}" == */* ]]; then
+    RELEASE_METADATA_FILE="$(dirname "${RELEASE_ASSETS_FILE}")/release-metadata.env"
+  else
+    RELEASE_METADATA_FILE="release-metadata.env"
+  fi
+fi
+
+tag_base="marble-${release_kernel_slug}"
+[[ -n "${release_rom_slug}" ]] && tag_base+="-${release_rom_slug}"
+[[ "${release_droidspaces}" == "true" ]] && tag_base+="-droidspaces"
+[[ -n "${SOURCE_RUN_NUMBER}" ]] && tag_base+="-r${SOURCE_RUN_NUMBER}"
+
+display="$(python3 - "${release_kernel_source}" <<'PY' 2>/dev/null || true
+import json, sys
+try:
+    presets = json.load(open("config/kernel-sources.json", encoding="utf-8"))
+except Exception:
+    sys.exit(0)
+print((presets.get(sys.argv[1]) or {}).get("display") or "")
+PY
+)"
+[[ -n "${display}" ]] || display="${release_kernel_source}"
+
+manager_label=""
+for mgr in "${manager_order[@]}"; do
+  [[ -n "${manager_label}" ]] && manager_label+=" + "
+  manager_label+="${mgr}"
+done
+[[ -n "${manager_label}" ]] || manager_label="unknown"
+
+title="${display}"
+[[ -n "${release_rom_version}" ]] && title+=" ${release_rom_version}"
+title+=" · ${manager_label}"
+[[ "${release_droidspaces}" == "true" ]] && title+=" · Droidspaces"
+[[ -n "${SOURCE_RUN_NUMBER}" ]] && title+=" · r${SOURCE_RUN_NUMBER}"
+
+{
+  printf 'release_kernel_source=%s\n' "${release_kernel_source}"
+  printf 'release_kernel_slug=%s\n' "${release_kernel_slug}"
+  printf 'release_rom_version=%s\n' "${release_rom_version}"
+  printf 'release_droidspaces=%s\n' "${release_droidspaces}"
+  printf 'release_manager_label=%s\n' "${manager_label}"
+  printf 'release_display=%s\n' "${display}"
+  printf 'release_tag=%s\n' "${tag_base}"
+  printf 'release_title=%s\n' "${title}"
+} > "${RELEASE_METADATA_FILE}"
+
 echo "Prepared $(wc -l < "${RELEASE_ASSETS_FILE}") verified release ZIP(s)"
 echo "Release notes (no CI cache section): ${RELEASE_NOTES_FILE}"
+echo "Release identity: tag=${tag_base} title=${title}"
+echo "Release metadata: ${RELEASE_METADATA_FILE}"

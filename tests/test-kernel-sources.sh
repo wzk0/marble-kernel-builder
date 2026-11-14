@@ -22,6 +22,7 @@ out="$(
   cd "${tmp_dir}"
   mkdir -p config scripts release
   cp "${repo_root}/config/kernel-sources.json" config/
+  cp "${repo_root}/config/evolution-x-versions.json" config/
   cp "${repo_root}/scripts/resolve-kernel-source.sh" scripts/
   KERNEL_SOURCE=melt SOURCE_REF='' PYTHON="${PYTHON}" bash scripts/resolve-kernel-source.sh
   cat release/kernel-source.env
@@ -34,9 +35,12 @@ assert_contains "${out}" "SUPPORTED_ROM_LABEL=HyperOS"
 assert_contains "${out}" "KERNEL_SOURCE_AUTHOR=Melt"
 
 # LOS multi-fragment presets
+# `evolution-x` resolves through config/evolution-x-versions.json, so its checkout
+# ref is the pinned commit of the default ROM version, not the branch name.
+evolution_x_commit="658b84f13496fa94659905e5f29b31cfde41d0ce"
 for preset_repo in \
   "lineageos|LineageOS/android_kernel_xiaomi_sm8450|lineage-23.2|LineageOS" \
-  "evolution-x|Evolution-X-Devices/kernel_xiaomi_sm8450|cnb|Evolution-X" \
+  "evolution-x|Evolution-X-Devices/kernel_xiaomi_sm8450|${evolution_x_commit}|Evolution-X" \
   "aosp-pablo|aosp-pablo/android_kernel_xiaomi_sm8450|16|aosp-pablo" \
   "pa-gr|pa-gr/android_kernel_xiaomi_sm8450|vauxite|pa-gr"
 do

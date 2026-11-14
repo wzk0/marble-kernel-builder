@@ -19,8 +19,16 @@ make_artifact() {
   printf 'zip_name=%s\n' "${zip_name}" > "${dir}/zip-name.env"
   printf '{}\n' > "${dir}/build-info.json"
   cat > "${dir}/build-info.txt" <<INFO
-source_repo=mohdakil2426/android_kernel_xiaomi_marble
-source_ref=melt-rebase
+kernel_source=evolution-x
+kernel_display=Evolution-X
+source_repo=Evolution-X-Devices/kernel_xiaomi_sm8450
+source_ref=658b84f13496fa94659905e5f29b31cfde41d0ce
+source_ref_label=cnb
+evolution_x_version=12.4
+evolution_x_android=17
+evolution_x_manifest_branch=cnb
+droidspaces_enabled=${DROIDSPACES_ENABLED:-false}
+droidspaces_profile=gki-5.10
 source_commit=3673961d444b5e2b879be97a161241243d543bd2
 workflow_run=https://github.com/mohdakil2426/marble-kernel-builder/actions/runs/123
 android_clang_version=clang-r416183b
@@ -48,6 +56,8 @@ make_artifact "${valid_dir}" marble-flash-resukisu-susfs-image-only-r9 resukisu 
 MATRIX_ARTIFACTS_DIR="${valid_dir}" \
 MATRIX_SUMMARY="${tmp_dir}/matrix-summary.md" \
 RELEASE_ASSETS_FILE="${tmp_dir}/release-assets.txt" \
+RELEASE_METADATA_FILE="${tmp_dir}/release-metadata.env" \
+SOURCE_RUN_NUMBER=9 \
 BUILD_SCOPE=image-only \
   bash scripts/prepare-promoted-release.sh
 
@@ -79,6 +89,7 @@ make_artifact "${tmp_dir}" valid-single-root kernelsu-next \
 MATRIX_ARTIFACTS_DIR="${single_root}" \
 MATRIX_SUMMARY="${tmp_dir}/single-matrix-summary.md" \
 RELEASE_ASSETS_FILE="${tmp_dir}/single-release-assets.txt" \
+RELEASE_METADATA_FILE="${tmp_dir}/single-release-metadata.env" \
 BUILD_SCOPE=image-only \
   bash scripts/prepare-promoted-release.sh
 
@@ -124,6 +135,38 @@ if MATRIX_ARTIFACTS_DIR="${empty_dir}" MATRIX_SUMMARY="${tmp_dir}/empty.md" \
   RELEASE_ASSETS_FILE="${tmp_dir}/empty-assets.txt" BUILD_SCOPE=image-only \
   bash scripts/prepare-promoted-release.sh >/dev/null 2>&1; then
   echo "FAIL: empty artifact directory should block promotion" >&2
+  exit 1
+fi
+
+# ── Release identity is derived from the artifacts, not from workflow inputs ──
+cat "${tmp_dir}/release-metadata.env"
+grep -qx 'release_kernel_source=evolution-x' "${tmp_dir}/release-metadata.env" \
+  || { echo "FAIL: release identity must come from build-info" >&2; exit 1; }
+grep -qx 'release_rom_version=12.4' "${tmp_dir}/release-metadata.env" \
+  || { echo "FAIL: rom version missing from release identity" >&2; exit 1; }
+grep -qx 'release_droidspaces=false' "${tmp_dir}/release-metadata.env" \
+  || { echo "FAIL: droidspaces flag wrong" >&2; exit 1; }
+grep -qx 'release_tag=marble-evolution-x-12.4-r9' "${tmp_dir}/release-metadata.env" \
+  || { echo "FAIL: tag must not be marble-auto-* (got: $(grep release_tag= "${tmp_dir}/release-metadata.env"))" >&2; exit 1; }
+grep -qx 'release_title=Evolution-X 12.4 · kernelsu-next + resukisu · r9' "${tmp_dir}/release-metadata.env" \
+  || { echo "FAIL: title mismatch (got: $(grep release_title= "${tmp_dir}/release-metadata.env"))" >&2; exit 1; }
+
+# Mixed kernel_source across artifacts must block promotion.
+mixed_dir="${tmp_dir}/mixed-source"
+make_artifact "${mixed_dir}" marble-flash-a-image-only-r9 kernelsu-next AK3_marble_LOS_evolution-x_noroot_r9.zip
+mkdir -p "${mixed_dir}/marble-flash-b-image-only-r9"
+cp -R "${mixed_dir}/marble-flash-a-image-only-r9/." "${mixed_dir}/marble-flash-b-image-only-r9/"
+sed -i 's/^kernel_source=.*/kernel_source=melt/' "${mixed_dir}/marble-flash-b-image-only-r9/build-info.txt"
+sed -i 's/^zip_name=.*/zip_name=AK3_marble_MELT_melt_noroot_r9.zip/' "${mixed_dir}/marble-flash-b-image-only-r9/zip-name.env"
+mv "${mixed_dir}/marble-flash-b-image-only-r9/AK3_marble_LOS_evolution-x_noroot_r9.zip" \
+   "${mixed_dir}/marble-flash-b-image-only-r9/AK3_marble_MELT_melt_noroot_r9.zip"
+mv "${mixed_dir}/marble-flash-b-image-only-r9/AK3_marble_LOS_evolution-x_noroot_r9.zip.sha256" \
+   "${mixed_dir}/marble-flash-b-image-only-r9/AK3_marble_MELT_melt_noroot_r9.zip.sha256"
+(cd "${mixed_dir}/marble-flash-b-image-only-r9" && sha256sum AK3_marble_MELT_melt_noroot_r9.zip > AK3_marble_MELT_melt_noroot_r9.zip.sha256)
+if MATRIX_ARTIFACTS_DIR="${mixed_dir}" MATRIX_SUMMARY="${tmp_dir}/mixed.md" \
+  RELEASE_ASSETS_FILE="${tmp_dir}/mixed-assets.txt" BUILD_SCOPE=image-only \
+  bash scripts/prepare-promoted-release.sh >/dev/null 2>&1; then
+  echo "FAIL: mixed kernel_source artifacts must block promotion" >&2
   exit 1
 fi
 

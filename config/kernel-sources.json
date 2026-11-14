@@ -47,7 +47,18 @@
       "vendor/debugfs.config"
     ],
     "recommended_toolchain": "llvm-22.1.8",
-    "notes": "Evolution-X device org SM8450 kernel for marble. Prefer clean branches without in-tree KSU. Needs llvm-22.1.8 (armv9 flags)."
+    "notes": "Evolution-X device org SM8450 kernel for marble. Resolved through config/evolution-x-versions.json (ROM version -> exact kernel commit), so the checkout is pinned to the commit the installed ROM was built from. Needs llvm-22.1.8 (armv9 flags).",
+    "version_map": true,
+    "source_patches": {
+      "enabled": true,
+      "dir": "patches/kernel-sources/evolution-x/droidspaces",
+      "match_refs": [
+        "cnb",
+        "658b84f13496fa94659905e5f29b31cfde41d0ce"
+      ],
+      "requires_env": "ENABLE_DROIDSPACES",
+      "notes": "Droidspaces GKI kABI padding patches (SYSVIPC + POSIX_MQUEUE). Applied only when ENABLE_DROIDSPACES=true. Verbatim from ravindu644/Droidspaces-OSS; re-verify with git apply --check when the kernel commit changes."
+    }
   },
   "aosp-pablo": {
     "display": "aosp-pablo",
@@ -89,7 +100,9 @@
     "source_patches": {
       "enabled": true,
       "dir": "patches/kernel-sources/pa-gr/vauxite",
-      "match_refs": ["vauxite"],
+      "match_refs": [
+        "vauxite"
+      ],
       "notes": "Clang 22 -Wuninitialized-const-pointer on sys_regs.c. Disable or delete when pa-gr/vauxite includes equivalent fix."
     }
   }

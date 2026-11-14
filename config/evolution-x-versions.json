@@ -1,0 +1,35 @@
+{
+  "default": "12.4",
+  "notes": [
+    "每一条都是某个已发布 Evolution X 构建的内核映射。升级 ROM 后请用 scripts/derive-kernel-pin.sh 从 `adb shell uname -r` 反推 kernel_commit，不要再靠分支 HEAD。",
+    "kernel_commit 必须等于该 ROM 内核 release 串里的 `-g<sha>`；否则 CONFIG_LOCALVERSION_AUTO 会生成不同的 vermagic，vendor_dlkm 模块全部拒载。",
+    "config_fragments 必须与 device_xiaomi_sm8450-common 对应分支的 TARGET_KERNEL_CONFIG 一致；改之前先对比真机 /proc/config.gz。"
+  ],
+  "versions": {
+    "12.4": {
+      "android": "17",
+      "manifest_branch": "cnb",
+      "rom_build": "EvolutionX-17.0-20261112-marble-12.4-Official",
+      "kernel_source_preset": "evolution-x",
+      "kernel_repo": "Evolution-X-Devices/kernel_xiaomi_sm8450",
+      "kernel_ref": "cnb",
+      "kernel_commit": "658b84f13496fa94659905e5f29b31cfde41d0ce",
+      "kernel_version": "5.10.269",
+      "kernel_release_suffix": "-gki-g658b84f13496",
+      "official_toolchain": "aosp-clang-r563880c",
+      "recommended_toolchain": "llvm-22.1.8",
+      "defconfig_mode": "gki_fragments",
+      "base_defconfig": "gki_defconfig",
+      "config_fragments": [
+        "vendor/waipio_GKI.config",
+        "vendor/xiaomi_GKI.config",
+        "vendor/marble_GKI.config",
+        "vendor/debugfs.config"
+      ],
+      "droidspaces_profile": "gki-5.10",
+      "susfs_kernel_branch": "gki-android12-5.10",
+      "status": "verified-on-device",
+      "evidence": "adb shell uname -r => 5.10.269-gki-g658b84f13496; /proc/config.gz exported to reports/evidence/marble-12.4-stock-config.txt"
+    }
+  }
+}

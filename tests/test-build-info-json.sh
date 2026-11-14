@@ -4,6 +4,7 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${repo_root}"
 
+PYTHON="${PYTHON:-python3}"
 tmp_dir="$(mktemp -d)"
 trap 'rm -rf "${tmp_dir}"' EXIT
 
@@ -36,7 +37,6 @@ json_file="${release_dir}/build-info.json"
   exit 1
 }
 
-PYTHON="${PYTHON:-python3}"
 "${PYTHON}" - "${json_file}" <<'PY'
 import json
 import sys
@@ -59,6 +59,51 @@ assert data["susfs"]["enabled"] is True
 assert data["susfs"]["reported_version"] == "v2.2.0"
 assert data["artifact"]["zip_name"].startswith("AK3_marble_MELT_melt_resukisu")
 assert data["artifact"]["zip_sha256"] == "abc123"
+
+# Provenance blocks exist even when the fields are absent (Melt build).
+assert data["rom"]["evolution_x_version"] == ""
+assert data["kernel"]["commit"] == ""
+assert data["droidspaces"]["enabled"] is False
+PY
+
+# ── Evolution X / Droidspaces provenance is recorded when present ────────────
+cat >> "${release_dir}/build-info.txt" <<'INFO'
+kernel_ref=cnb
+kernel_commit=658b84f13496fa94659905e5f29b31cfde41d0ce
+kernel_release_suffix=-gki-g658b84f13496
+kernel_version_label=5.10.269
+source_ref_label=cnb
+evolution_x_version=12.4
+evolution_x_android=17
+evolution_x_manifest_branch=cnb
+evolution_x_rom_build=EvolutionX-17.0-20261112-marble-12.4-Official
+droidspaces_enabled=true
+droidspaces_profile=gki-5.10
+droidspaces_patch_dir=patches/kernel-sources/evolution-x/droidspaces
+official_toolchain=aosp-clang-r563880c
+INFO
+
+KERNEL_DIR="${tmp_dir}" bash scripts/write-build-info-json.sh >/dev/null
+
+"${PYTHON}" - "${json_file}" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as fh:
+    data = json.load(fh)
+
+assert data["rom"]["evolution_x_version"] == "12.4"
+assert data["rom"]["android"] == "17"
+assert data["rom"]["manifest_branch"] == "cnb"
+assert data["rom"]["build"] == "EvolutionX-17.0-20261112-marble-12.4-Official"
+assert data["kernel"]["ref"] == "cnb"
+assert data["kernel"]["commit"] == "658b84f13496fa94659905e5f29b31cfde41d0ce"
+assert data["kernel"]["release_suffix"] == "-gki-g658b84f13496"
+assert data["kernel"]["version"] == "5.10.269"
+assert data["kernel"]["official_toolchain"] == "aosp-clang-r563880c"
+assert data["droidspaces"]["enabled"] is True
+assert data["droidspaces"]["profile"] == "gki-5.10"
+assert data["droidspaces"]["patch_dir"].endswith("evolution-x/droidspaces")
 PY
 
 echo "Build-info JSON tests passed"

@@ -51,6 +51,26 @@ data = {
         "runner_image_os": info.get("runner_image_os", ""),
         "runner_image_version": info.get("runner_image_version", ""),
     },
+    "rom": {
+        "evolution_x_version": info.get("evolution_x_version", ""),
+        "android": info.get("evolution_x_android", ""),
+        "manifest_branch": info.get("evolution_x_manifest_branch", ""),
+        "build": info.get("evolution_x_rom_build", ""),
+    },
+    "kernel": {
+        "repo": info.get("source_repo", ""),
+        "ref": info.get("kernel_ref", ""),
+        "ref_label": info.get("source_ref_label", ""),
+        "commit": info.get("kernel_commit", ""),
+        "version": info.get("kernel_version_label", ""),
+        "release_suffix": info.get("kernel_release_suffix", ""),
+        "official_toolchain": info.get("official_toolchain", ""),
+    },
+    "droidspaces": {
+        "enabled": info.get("droidspaces_enabled", "false") == "true",
+        "profile": info.get("droidspaces_profile", ""),
+        "patch_dir": info.get("droidspaces_patch_dir", ""),
+    },
     "compiler": {
         "android_clang_version": info.get("android_clang_version", ""),
         "android_clang_commit": info.get("android_clang_commit", ""),

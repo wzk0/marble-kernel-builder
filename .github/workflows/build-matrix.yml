@@ -6,7 +6,7 @@ on:
       build_source_melt:
         description: "Source: Melt (Stock HyperOS)"
         type: boolean
-        default: true
+        default: false
       build_source_lineageos:
         description: "Source: LineageOS (LOS ROMs)"
         type: boolean
@@ -14,7 +14,7 @@ on:
       build_source_evolution_x:
         description: "Source: Evolution-X (LOS ROMs)"
         type: boolean
-        default: false
+        default: true
       build_source_aosp_pablo:
         description: "Source: aosp-pablo (LOS ROMs)"
         type: boolean
@@ -38,6 +38,15 @@ on:
           - evolution-x
           - aosp-pablo
           - pa-gr
+      # ── Target ROM ──
+      evolution_x_version:
+        description: "Evolution X version (empty = mapping default in config/evolution-x-versions.json)"
+        required: false
+        default: ""
+      enable_droidspaces:
+        description: "Droidspaces support (GKI kABI patches + namespace/IPC/devtmpfs config)"
+        type: boolean
+        default: true
       # ── Root Managers ──
       build_none:
         description: "Manager: Baseline (No Root)"
@@ -46,7 +55,7 @@ on:
       build_kernelsu:
         description: "Manager: KernelSU (No SUSFS)"
         type: boolean
-        default: false
+        default: true
       build_kernelsu_next:
         description: "Manager: KernelSU-Next"
         type: boolean
@@ -112,13 +121,13 @@ on:
       create_draft_release:
         description: Create a draft GitHub release when the build succeeds
         type: boolean
-        default: false
+        default: true
 
 permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-${{ inputs.toolchain }}-${{ inputs.lto }}-${{ inputs.enable_susfs }}-${{ inputs.build_scope }}
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ inputs.kernel_source }}-${{ inputs.toolchain }}-${{ inputs.lto }}-${{ inputs.enable_susfs }}-${{ inputs.build_scope }}
   cancel-in-progress: false
 
 jobs:
@@ -191,6 +200,8 @@ jobs:
       susfs_ref: ${{ inputs.susfs_ref }}
       susfs_expected_version: ""
       build_scope: ${{ inputs.build_scope }}
+      evolution_x_version: ${{ inputs.evolution_x_version }}
+      enable_droidspaces: ${{ inputs.enable_droidspaces }}
       toolchain: ${{ inputs.toolchain }}
       lto: ${{ inputs.lto }}
       enable_ccache: ${{ inputs.enable_ccache }}
@@ -269,31 +280,34 @@ jobs:
         run: bash scripts/prepare-promoted-release.sh
 
       - name: Create ZIP-only draft release
-        env:
-          KERNEL_SOURCE: ${{ inputs.kernel_source }}
         run: |
-          source_slug="${KERNEL_SOURCE:-melt}"
-          source_slug="$(printf '%s' "${source_slug}" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9._-]+/-/g; s/^-+//; s/-+$//')"
-          [[ -n "${source_slug}" ]] || source_slug="melt"
-          display="${source_slug}"
-          if [[ -f config/kernel-sources.json ]]; then
-            display="$(KERNEL_SOURCE="${KERNEL_SOURCE}" python3 -c "import json,os; p=json.load(open('config/kernel-sources.json',encoding='utf-8')); print(p.get(os.environ.get('KERNEL_SOURCE',''),{}).get('display') or '')")"
-            [[ -n "${display}" ]] || display="${source_slug}"
+          mapfile -t release_assets < release-assets.txt
+          if [[ "${#release_assets[@]}" -eq 0 ]]; then
+            echo "::error::No verified ZIP assets were prepared"
+            exit 1
           fi
 
-          tag="marble-${source_slug}-r${GITHUB_RUN_NUMBER}"
+          # Release identity (tag/title/rom version) is derived from the build
+          # artifacts by prepare-promoted-release.sh, never from workflow inputs:
+          # the `kernel_source` input defaults to `auto`.
+          if [[ ! -f release-metadata.env ]]; then
+            echo "::error::release-metadata.env missing; prepare-promoted-release.sh must write it"
+            exit 1
+          fi
+          # shellcheck disable=SC1091
+          source release-metadata.env
+          tag="${release_tag}"
+          if [[ -z "${tag}" ]]; then
+            echo "::error::release_tag is empty in release-metadata.env"
+            exit 1
+          fi
+
           if gh release view "${tag}" >/dev/null 2>&1; then
             echo "::error::Release ${tag} already exists"
             exit 1
           fi
           if gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${tag}" >/dev/null 2>&1; then
             echo "::error::Tag ${tag} already exists"
-            exit 1
-          fi
-
-          mapfile -t release_assets < release-assets.txt
-          if [[ "${#release_assets[@]}" -eq 0 ]]; then
-            echo "::error::No verified ZIP assets were prepared"
             exit 1
           fi
 
@@ -306,5 +320,5 @@ jobs:
           gh release create "${tag}" "${release_assets[@]}" \
             --draft \
             --target "${GITHUB_SHA}" \
-            --title "Marble Kernel · ${display} · r${GITHUB_RUN_NUMBER}" \
+            --title "${release_title}" \
             --notes-file "${notes_file}"

@@ -1,0 +1,2 @@
+001.GKI-below-6.12-fix_sysvipc_kabi_6_7_8.patch
+002.5.10_or_lower_use_android_abi_padding_for_posix_mqueue.patch

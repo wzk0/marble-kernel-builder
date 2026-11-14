@@ -288,8 +288,26 @@ grep -Fq 'create_draft_release:' "${matrix}" || {
   exit 1
 }
 
-grep -Fq 'create_draft_release: true' "${matrix}" && {
-  echo "FAIL: draft release input must default to false" >&2
+grep -A3 -F 'create_draft_release:' "${matrix}" | grep -Fq 'default: true' || {
+  echo "FAIL: draft release input must default to true for the Evolution X target build" >&2
+  exit 1
+}
+
+# The Evolution X + KernelSU path is the default dispatch, Melt is opt-in.
+grep -A3 -F 'build_source_evolution_x:' "${matrix}" | grep -Fq 'default: true' || {
+  echo "FAIL: build_source_evolution_x must default to true" >&2
+  exit 1
+}
+grep -A3 -F 'build_source_melt:' "${matrix}" | grep -Fq 'default: false' || {
+  echo "FAIL: build_source_melt must default to false (no accidental Melt builds)" >&2
+  exit 1
+}
+grep -A3 -F 'build_kernelsu:' "${matrix}" | grep -Fq 'default: true' || {
+  echo "FAIL: build_kernelsu must default to true" >&2
+  exit 1
+}
+grep -A3 -F 'enable_droidspaces:' "${matrix}" | grep -Fq 'default: true' || {
+  echo "FAIL: enable_droidspaces must default to true" >&2
   exit 1
 }
 
@@ -369,6 +387,73 @@ grep -Fq 'matrix-summary-release.md' .github/workflows/build-matrix.yml || {
 
 grep -Fq 'publish_step_summary: false' .github/workflows/build-matrix.yml || {
   echo "FAIL: matrix child jobs should not publish separate job summaries" >&2
+  exit 1
+}
+
+# ── Evolution X version mapping + Droidspaces inputs ─────────────────────────
+for pattern in 'evolution_x_version:' 'enable_droidspaces:' \
+               'evolution_x_version: ${{ inputs.evolution_x_version }}' \
+               'enable_droidspaces: ${{ inputs.enable_droidspaces }}'; do
+  grep -Fq -- "${pattern}" "${matrix}" || {
+    echo "FAIL: build-matrix.yml missing Evolution X / Droidspaces wiring: ${pattern}" >&2
+    exit 1
+  }
+done
+
+grep -Fq 'build_source_evolution_x:' "${matrix}" || {
+  echo "FAIL: build-matrix.yml must expose the Evolution X source checkbox" >&2
+  exit 1
+}
+
+[[ -f config/evolution-x-versions.json ]] || {
+  echo "FAIL: config/evolution-x-versions.json is missing" >&2
+  exit 1
+}
+
+grep -Fq 'config/evolution-x-versions.json' "${core}" || {
+  echo "FAIL: build-core ccache config hash must cover config/evolution-x-versions.json" >&2
+  exit 1
+}
+
+grep -Fq 'evolution_x_version:' "${core}" || {
+  echo "FAIL: build-core must declare the evolution_x_version input" >&2
+  exit 1
+}
+
+grep -Fq 'ENABLE_DROIDSPACES' "${core}" || {
+  echo "FAIL: build-core must pass ENABLE_DROIDSPACES to the build scripts" >&2
+  exit 1
+}
+
+grep -Fq 'droidspaces_enabled=' "${core}" || {
+  echo "FAIL: build-info.txt must record droidspaces_enabled" >&2
+  exit 1
+}
+
+# The resolved .config must ship with the artifact so CI builds can be diffed
+# against the ROM's own /proc/config.gz.
+grep -Fq 'kernel-source/release/config.txt' "${core}" || {
+  echo "FAIL: build-core must upload the final kernel config" >&2
+  exit 1
+}
+grep -Fq 'config_sha256=' "${core}" || {
+  echo "FAIL: build-info.txt must record the config hash" >&2
+  exit 1
+}
+
+# Release identity must come from the artifacts, not from a workflow input.
+grep -Fq 'source release-metadata.env' "${matrix}" || {
+  echo "FAIL: release job must derive tag/title from release-metadata.env" >&2
+  exit 1
+}
+
+if grep -Fq 'source_slug="${KERNEL_SOURCE:-melt}"' "${matrix}"; then
+  echo "FAIL: release tag must not be derived from inputs.kernel_source (defaults to auto)" >&2
+  exit 1
+fi
+
+grep -Fq 'release-metadata.env' scripts/prepare-promoted-release.sh || {
+  echo "FAIL: prepare-promoted-release.sh must write release-metadata.env" >&2
   exit 1
 }
 

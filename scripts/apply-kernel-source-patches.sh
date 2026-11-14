@@ -5,6 +5,7 @@ set -euo pipefail
 
 KERNEL_SOURCE="${KERNEL_SOURCE:-melt}"
 SOURCE_REF="${SOURCE_REF:-}"
+SOURCE_REF_LABEL="${SOURCE_REF_LABEL:-}"
 KERNEL_DIR="${KERNEL_DIR:-kernel-source}"
 CONFIG_JSON="${CONFIG_JSON:-config/kernel-sources.json}"
 
@@ -30,11 +31,24 @@ if [[ -z "${PATCH_DIR}" ]]; then
   exit 0
 fi
 
+# Optional env gate: patches only apply when the named input is "true".
+# Example: requires_env=ENABLE_DROIDSPACES keeps kABI-sensitive patches opt-in.
+requires_env="$(jq -r --arg s "${KERNEL_SOURCE}" '.[$s].source_patches.requires_env // empty' "${CONFIG_JSON}")"
+if [[ -n "${requires_env}" ]]; then
+  gate_value="${!requires_env:-false}"
+  if [[ "${gate_value}" != "true" ]]; then
+    echo "Skipping source patches for ${KERNEL_SOURCE}: ${requires_env}=${gate_value:-unset} (patches are opt-in)"
+    exit 0
+  fi
+fi
+
 match_refs="$(jq -r --arg s "${KERNEL_SOURCE}" '.[$s].source_patches.match_refs // [] | if type=="array" then join(" ") else . end' "${CONFIG_JSON}")"
 if [[ -n "${match_refs}" ]]; then
   matched=0
   for ref in ${match_refs}; do
-    if [[ "${SOURCE_REF}" == "${ref}" ]]; then
+    # Source-local patches are pinned per kernel ref, so accept either the
+    # checkout target (branch/tag/commit) or the human-readable label.
+    if [[ "${SOURCE_REF}" == "${ref}" || ( -n "${SOURCE_REF_LABEL}" && "${SOURCE_REF_LABEL}" == "${ref}" ) ]]; then
       matched=1
       break
     fi
@@ -89,7 +103,7 @@ if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
   {
     echo "### Source-local patches"
     echo "- preset: \`${KERNEL_SOURCE}\`"
-    echo "- ref: \`${SOURCE_REF}\`"
+    echo "- ref: \`${SOURCE_REF}\`${SOURCE_REF_LABEL:+ (label ${SOURCE_REF_LABEL})}"
     echo "- dir: \`${PATCH_DIR}\`"
     echo "- count: ${applied}"
   } >>"${GITHUB_STEP_SUMMARY}"

@@ -10,11 +10,11 @@
   "kernelsu": {
     "display": "KernelSU",
     "repo": "tiann/KernelSU",
-    "default_ref": "main",
+    "default_ref": "v3.3.1",
     "setup_path": "kernel/setup.sh",
     "susfs_ref": "",
     "status": "stable-no-susfs",
-    "notes": "Official KernelSU. SUSFS is disabled because current official refs do not accept the upstream generic SUSFS manager patch."
+    "notes": "Official KernelSU. Pinned to tag v3.3.1 (0c0fdb960178fa12d80d6cbcfdcb6ad8be6a865d). SUSFS is disabled because current official refs do not accept the upstream generic SUSFS manager patch."
   },
   "kernelsu-next": {
     "display": "KernelSU-Next",

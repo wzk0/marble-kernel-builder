@@ -12,6 +12,11 @@ SUSFS_KERNEL_BRANCH="${SUSFS_KERNEL_BRANCH:-gki-android12-5.10}"
 SUSFS_REF="${SUSFS_REF:-}"
 SUSFS_EXPECTED_VERSION="${SUSFS_EXPECTED_VERSION:-}"
 MANAGER_REF="${MANAGER_REF:-}"
+ENABLE_DROIDSPACES="${ENABLE_DROIDSPACES:-false}"
+DROIDSPACES_PROFILE="${DROIDSPACES_PROFILE:-}"
+KERNEL_COMMIT="${KERNEL_COMMIT:-}"
+EVOLUTION_X_VERSION="${EVOLUTION_X_VERSION:-}"
+SUSFS_KERNEL_BRANCH_MAPPED="${SUSFS_KERNEL_BRANCH_MAPPED:-}"
 
 case "${MANAGER}" in
   none|kernelsu|kernelsu-next|sukisu-ultra|resukisu) ;;
@@ -91,8 +96,15 @@ if [[ "${ENABLE_SUSFS}" == "true" ]]; then
       [[ -z "${MANAGER_REF}" || "${MANAGER_REF}" == "main" ]] || { echo "::error::ReSukiSU + SUSFS requires official ref main"; exit 1; }
       ;;
   esac
-  if [[ "${SUSFS_KERNEL_BRANCH}" != "gki-android12-5.10" ]]; then
-    echo "::error::Marble requires SUSFS_KERNEL_BRANCH=gki-android12-5.10, got ${SUSFS_KERNEL_BRANCH}"
+  case "${SUSFS_KERNEL_BRANCH}" in
+    gki-android12-5.10|gki-android15-6.6) ;;
+    *)
+      echo "::error::Unsupported SUSFS_KERNEL_BRANCH=${SUSFS_KERNEL_BRANCH} (expected gki-android12-5.10 for 5.10 kernels, gki-android15-6.6 for 6.6)"
+      exit 1
+      ;;
+  esac
+  if [[ -n "${SUSFS_KERNEL_BRANCH_MAPPED}" && "${SUSFS_KERNEL_BRANCH}" != "${SUSFS_KERNEL_BRANCH_MAPPED}" ]]; then
+    echo "::error::SUSFS_KERNEL_BRANCH=${SUSFS_KERNEL_BRANCH} contradicts the ROM version mapping (${SUSFS_KERNEL_BRANCH_MAPPED})"
     exit 1
   fi
   if [[ "${SUSFS_VERSION}" == "custom" && -z "${SUSFS_REF}" ]]; then
@@ -105,6 +117,40 @@ if [[ "${ENABLE_SUSFS}" == "true" ]]; then
   fi
   if [[ -n "${SUSFS_EXPECTED_VERSION}" && ! "${SUSFS_EXPECTED_VERSION}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
     echo "::error::SUSFS_EXPECTED_VERSION must look like v2.2.0, got ${SUSFS_EXPECTED_VERSION}"
+    exit 1
+  fi
+fi
+
+case "${ENABLE_DROIDSPACES}" in
+  true|false) ;;
+  *) echo "::error::ENABLE_DROIDSPACES must be true or false, got ${ENABLE_DROIDSPACES}"; exit 1 ;;
+esac
+
+if [[ "${ENABLE_DROIDSPACES}" == "true" ]]; then
+  if [[ -z "${DROIDSPACES_PROFILE}" ]]; then
+    echo "::error::Droidspaces needs a version mapping (DROIDSPACES_PROFILE is empty). Select a kernel_source that resolves through config/evolution-x-versions.json."
+    exit 1
+  fi
+  if [[ ! "${KERNEL_COMMIT}" =~ ^[0-9a-f]{40}$ ]]; then
+    echo "::error::Droidspaces applies commit-specific kABI patches, so the kernel source must be pinned by commit (KERNEL_COMMIT is '${KERNEL_COMMIT}')"
+    exit 1
+  fi
+  if [[ ! -f config/kernel-sources.json ]]; then
+    echo "::error::config/kernel-sources.json is missing"
+    exit 1
+  fi
+  patch_dir="$(jq -r --arg s "${KERNEL_SOURCE}" '.[$s].source_patches.dir // empty' config/kernel-sources.json)"
+  patch_gate="$(jq -r --arg s "${KERNEL_SOURCE}" '.[$s].source_patches.requires_env // empty' config/kernel-sources.json)"
+  if [[ -z "${patch_dir}" || "${patch_gate}" != "ENABLE_DROIDSPACES" ]]; then
+    echo "::error::kernel_source '${KERNEL_SOURCE}' has no Droidspaces patch series (source_patches.requires_env=ENABLE_DROIDSPACES)"
+    exit 1
+  fi
+  if [[ ! -f "${patch_dir}/series" ]]; then
+    echo "::error::Missing Droidspaces patch series: ${patch_dir}/series"
+    exit 1
+  fi
+  if ! grep -qvE '^\s*(#|$)' "${patch_dir}/series"; then
+    echo "::error::Droidspaces patch series is empty: ${patch_dir}/series"
     exit 1
   fi
 fi

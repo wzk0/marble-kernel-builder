@@ -7,6 +7,7 @@ KERNEL_DIR="${KERNEL_DIR:-kernel-source}"
 BUILD_SCOPE="${BUILD_SCOPE:-image-only}"
 MANAGER="${MANAGER:-none}"
 ENABLE_SUSFS="${ENABLE_SUSFS:-false}"
+ENABLE_DROIDSPACES="${ENABLE_DROIDSPACES:-false}"
 JOBS="${JOBS:-$(nproc)}"
 USE_CCACHE="${USE_CCACHE:-true}"
 TOOLCHAIN="${TOOLCHAIN:-android-r416183b}"
@@ -109,6 +110,27 @@ if [[ "${ENABLE_SUSFS}" == "true" ]]; then
   scripts/config --file "${OUT_DIR}/.config" -e KSU_SUSFS
 fi
 
+# Droidspaces needs namespaces/IPC that stock Android GKI disables. The matching
+# kABI padding patches are applied earlier by apply-kernel-source-patches.sh
+# (preset-gated); without them these options shift struct offsets and every
+# vendor_dlkm module fails its CRC check on boot.
+if [[ "${ENABLE_DROIDSPACES}" == "true" ]]; then
+  echo "Enabling Droidspaces kernel requirements" | tee -a "${RELEASE_DIR}/build.log"
+  scripts/config --file "${OUT_DIR}/.config" \
+    -e SYSVIPC \
+    -e POSIX_MQUEUE \
+    -e IPC_NS \
+    -e PID_NS \
+    -e DEVTMPFS \
+    -e NETFILTER_XT_MATCH_ADDRTYPE
+  # Explicitly keep the kABI-breaking resource-limit options off. Enabling them
+  # resizes scheduler/cgroup structures; no KABI padding covers that.
+  scripts/config --file "${OUT_DIR}/.config" -d CFS_BANDWIDTH -d CGROUP_PIDS
+  if [[ "${LTO:-thin}" == "none" ]]; then
+    echo "::warning::LTO=none drops CONFIG_CFI_CLANG (it depends on LTO); the official ROM kernel runs CFI+LTO. Prefer lto=thin."
+  fi
+fi
+
 # Apply selectable Clang LTO for all presets (including gki_fragments / Melt).
 # Default thin is free-runner safe with swap + thinlto job caps; full needs more RAM.
 LTO="${LTO:-thin}"
@@ -144,6 +166,23 @@ fi
 if [[ "${ENABLE_SUSFS}" == "true" ]] && ! grep -q '^CONFIG_KSU_SUSFS=y$' "${OUT_DIR}/.config"; then
   echo "::error::CONFIG_KSU_SUSFS is not enabled in the final kernel config"
   exit 1
+fi
+
+if [[ "${ENABLE_DROIDSPACES}" == "true" ]]; then
+  droidspaces_required=(SYSVIPC POSIX_MQUEUE IPC_NS PID_NS DEVTMPFS NETFILTER_XT_MATCH_ADDRTYPE)
+  for sym in "${droidspaces_required[@]}"; do
+    if ! grep -q "^CONFIG_${sym}=y$" "${OUT_DIR}/.config"; then
+      echo "::error::Droidspaces requires CONFIG_${sym}=y in the final kernel config (not set)"
+      exit 1
+    fi
+  done
+  for sym in CFS_BANDWIDTH CGROUP_PIDS; do
+    if ! grep -q "^# CONFIG_${sym} is not set$" "${OUT_DIR}/.config"; then
+      echo "::error::CONFIG_${sym} must stay disabled: it breaks the GKI kABI (vendor modules will refuse to load)"
+      exit 1
+    fi
+  done
+  echo "Droidspaces config assertions passed ($(printf '%s ' "${droidspaces_required[@]}"))"
 fi
 
 targets=(Image)

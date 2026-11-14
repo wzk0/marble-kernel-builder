@@ -63,6 +63,16 @@ on:
         required: false
         type: boolean
         default: true
+      # Evolution X ROM version; empty means "use the mapping default" in
+      # config/evolution-x-versions.json (single source of truth for the pin).
+      evolution_x_version:
+        required: false
+        type: string
+        default: ""
+      enable_droidspaces:
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   build:
@@ -91,6 +101,8 @@ jobs:
       USE_CCACHE: ${{ inputs.enable_ccache }}
       TOOLCHAIN: ${{ inputs.toolchain }}
       LTO: ${{ inputs.lto }}
+      EVOLUTION_X_VERSION: ${{ inputs.evolution_x_version }}
+      ENABLE_DROIDSPACES: ${{ inputs.enable_droidspaces }}
       ANDROID_CLANG_BIN: ${{ github.workspace }}/android-clang/clang-r416183b/bin
       LLVM_22_1_8_BIN: ${{ github.workspace }}/llvm-22.1.8/bin
 
@@ -281,7 +293,8 @@ jobs:
           # to reach sha256sum as its own argument.
           # shellcheck disable=SC2046
           config_hash="$(sha256sum scripts/build-kernel.sh config/marble.env config/managers.json \
-            config/susfs-refs.json config/kernel-sources.json scripts/resolve-kernel-source.sh \
+            config/susfs-refs.json config/kernel-sources.json config/evolution-x-versions.json \
+            scripts/resolve-kernel-source.sh \
             scripts/apply-kernel-source-patches.sh \
             $(find patches/kernel-sources -type f 2>/dev/null | sort || true) \
             | sha256sum | cut -d' ' -f1)"
@@ -340,6 +353,13 @@ jobs:
       - name: Build kernel
         run: bash scripts/build-kernel.sh
 
+      # Keep the resolved kernel config with the artifacts: it is the only way to
+      # diff a CI build against the ROM's own /proc/config.gz.
+      - name: Copy final kernel config
+        run: |
+          cp "${KERNEL_DIR}/out/.config" "${KERNEL_DIR}/release/config.txt"
+          wc -l "${KERNEL_DIR}/release/config.txt"
+
       - name: Read manager build metadata
         run: bash scripts/read-manager-build-metadata.sh
 
@@ -362,7 +382,20 @@ jobs:
             echo "config_fragments=${CONFIG_FRAGMENTS:-}"
             echo "source_repo=${SOURCE_REPO}"
             echo "source_ref=${SOURCE_REF}"
+            echo "source_ref_label=${SOURCE_REF_LABEL:-}"
             echo "source_commit=$(git -C kernel-source rev-parse HEAD)"
+            echo "kernel_ref=${KERNEL_REF:-}"
+            echo "kernel_commit=${KERNEL_COMMIT:-}"
+            echo "kernel_release_suffix=${KERNEL_RELEASE_SUFFIX:-}"
+            echo "kernel_version_label=${KERNEL_VERSION_LABEL:-}"
+            echo "evolution_x_version=${EVOLUTION_X_VERSION:-}"
+            echo "evolution_x_android=${EVOLUTION_X_ANDROID:-}"
+            echo "evolution_x_manifest_branch=${EVOLUTION_X_MANIFEST_BRANCH:-}"
+            echo "evolution_x_rom_build=${EVOLUTION_X_ROM_BUILD:-}"
+            echo "droidspaces_enabled=${ENABLE_DROIDSPACES:-false}"
+            echo "droidspaces_profile=${DROIDSPACES_PROFILE:-}"
+            echo "droidspaces_patch_dir=$(jq -r --arg s "${KERNEL_SOURCE}" '.[$s].source_patches.dir // empty' config/kernel-sources.json)"
+            echo "official_toolchain=${OFFICIAL_TOOLCHAIN:-}"
             echo "workflow_run=${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
             echo "runner_image_os=${ImageOS:-unknown}"
             echo "runner_image_version=${ImageVersion:-unknown}"
@@ -371,6 +404,8 @@ jobs:
             echo "toolchain=${TOOLCHAIN}"
             echo "toolchain_digest=${ACTIVE_TOOLCHAIN_DIGEST}"
             echo "lto=${LTO:-thin}"
+            echo "config_sha256=$(sha256sum kernel-source/release/config.txt | awk '{print $1}')"
+            echo "config_lines=$(wc -l < kernel-source/release/config.txt)"
             echo "package_family=${PACKAGE_FAMILY:-}"
             echo "quality_channel=${QUALITY_CHANNEL:-experimental}"
             if [[ "${KERNEL_SOURCE:-melt}" == "melt" ]]; then
@@ -424,6 +459,7 @@ jobs:
             kernel-source/release/zip-audit.txt
             kernel-source/release/ccache-stats.txt
             kernel-source/release/zip-name.env
+            kernel-source/release/config.txt
 
       # Object caches: save even when the build fails (e.g. 90% compile then OOM),
       # so the next run can reuse partial work. Never save on cancel. Exact GHA

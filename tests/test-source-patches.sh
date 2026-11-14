@@ -17,9 +17,10 @@ assert sp.get("enabled") is True
 assert sp.get("dir") == "patches/kernel-sources/pa-gr/vauxite"
 assert "vauxite" in (sp.get("match_refs") or [])
 
-# Only pa-gr should have source_patches for now
+# Only presets with a verified patch series may declare source_patches.
+allowed_with_patches = {"pa-gr", "evolution-x"}
 for name, preset in presets.items():
-    if name == "pa-gr":
+    if name in allowed_with_patches:
         continue
     assert not preset.get("source_patches"), f"{name} must not declare source_patches yet"
 

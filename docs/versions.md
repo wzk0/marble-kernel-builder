@@ -6,7 +6,8 @@ Last updated: **2026-07-13** (branch `feature/pa-gr-kernel-source` — pa-gr SM8
 |---|---|---|---|
 | Kernel source (`melt`) | `mohdakil2426/android_kernel_xiaomi_marble` | `melt-rebase` | HyperOS / Melt marble source (`marble_defconfig`) |
 | Kernel source (`lineageos`) | `LineageOS/android_kernel_xiaomi_sm8450` | `lineage-23.2` | LOS GKI fragments (`gki_defconfig` + marble vendor configs) |
-| Kernel source (`evolution-x`) | `Evolution-X-Devices/kernel_xiaomi_sm8450` | `cnb` | LOS-family GKI fragments for Evolution X / custom LOS |
+| Kernel source (`evolution-x`) | `Evolution-X-Devices/kernel_xiaomi_sm8450` | `cnb` → **pinned per ROM version** | LOS-family GKI fragments for Evolution X / custom LOS. The checkout commit comes from `config/evolution-x-versions.json` (see below), not from the branch HEAD |
+| **Evolution X 12.4 kernel** | `Evolution-X-Devices/kernel_xiaomi_sm8450` | commit `658b84f13496fa94659905e5f29b31cfde41d0ce` | Linux **5.10.269**, release string `5.10.269-gki-g658b84f13496`. Verified on device: `uname -r`, `/proc/config.gz` |
 | Kernel source (`aosp-pablo`) | `aosp-pablo/android_kernel_xiaomi_sm8450` | `16` | LOS-family GKI fragments (GitHub org aosp-pablo) |
 | Kernel source (`pa-gr`) | `pa-gr/android_kernel_xiaomi_sm8450` | `vauxite` | LOS-family GKI fragments; default branch may ship in-tree KernelSU |
 | Android kernel Clang | `https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86` | `master-kernel-build-2021` | commit `6e3223f76384455acde43affde3df0ea9df66c0d`; sparse path `clang-r416183b`, matching `build.config.common` |
@@ -14,7 +15,7 @@ Last updated: **2026-07-13** (branch `feature/pa-gr-kernel-source` — pa-gr SM8
 | AnyKernel3 | `osm0sis/AnyKernel3` | commit `dca9dc370838d919d56c1f59ec78b27a14a72c68` | Immutable packaging template |
 | SUSFS | `https://gitlab.com/simonpunk/susfs4ksu.git` | commit `4003ecf2d01c6d13fa8edf6c4f2607365738dc3d` | `SUSFS_VERSION v2.2.0`; CI-proven with KernelSU-Next/pershoot, official SukiSU Ultra, and ReSukiSU |
 | SUSFS older preset | `https://gitlab.com/simonpunk/susfs4ksu.git` | commit `86114db0c49f20fa7857b8b559f3ab87cbc2d00d` | `SUSFS_VERSION v2.1.0`; WildKernels GKI r4 gki-android12-5.10 pin |
-| KernelSU | `tiann/KernelSU` | `main` | Official source; non-SUSFS builds only |
+| KernelSU | `tiann/KernelSU` | tag **`v3.3.1`** (`0c0fdb960178fa12d80d6cbcfdcb6ad8be6a865d`) | Official source; non-SUSFS builds only. Default root manager for the Evolution X target build |
 | KernelSU-Next | `KernelSU-Next/KernelSU-Next` | `dev` | Official non-SUSFS ref |
 | KernelSU-Next + SUSFS | `pershoot/KernelSU-Next` | `dev-susfs` | Fork branch based on official `dev` with SUSFS integration; CI-proven on Marble run `27937351021` |
 | Manager version code | (computed in `read-manager-version.sh`) | Wild-style | `git rev-list --count HEAD + BASE` (KSUN/Suki/ReSuki: BASE 10200 if commits&lt;2684 else 30000; KernelSU BASE 30000), inject `DKSU_VERSION`/`KSU_VERSION` into Makefile; fallback to Makefile literal |
@@ -35,6 +36,33 @@ AK3_marble_<FAMILY>_<source>_<manager>[-version][-codeN][_susfs-vX.Y.Z]_rN.zip
 `FAMILY` is `MELT` or `LOS`. Manager version/code stay in the name when available; SUSFS off omits the segment; LTO is not in the filename. Enabling `create_draft_release` creates a ZIP-only draft tag `marble-<preset>-r<run>` without rebuilding.
 
 **Toolchain:** workflow default is `auto` (preset `recommended_toolchain`, else `android-r416183b`).
+
+## Evolution X version mapping (`config/evolution-x-versions.json`)
+
+Evolution X publishes no build manifest, so the only reliable way to reproduce "the kernel this ROM was
+built from" is the kernel's own release string. `CONFIG_LOCALVERSION_AUTO=y` makes it carry the short SHA:
+
+```
+adb shell uname -r      →  5.10.269-gki-g658b84f13496
+                            └ version ┘     └ commit prefix
+```
+
+`scripts/derive-kernel-pin.sh --adb --version 12.4` turns that into a mapping block. The resolver then pins
+`SOURCE_REF` to the **full commit**, so vermagic matches the ROM's `vendor_dlkm` modules byte for byte.
+Using a newer branch HEAD instead would change the suffix to `-g<other-sha>` and every vendor module would
+be rejected at load time.
+
+| Field | Purpose |
+|---|---|
+| `kernel_commit` | 40-char SHA the ROM was built from — **vermagic critical** |
+| `kernel_release_suffix` | Cross-check against `kernel_commit` (the resolver refuses a mismatch) |
+| `config_fragments` | Must equal the matching `device_xiaomi_sm8450-common` `TARGET_KERNEL_CONFIG` |
+| `droidspaces_profile` | Enables the Droidspaces config block; also requires a pinned commit |
+| `official_toolchain` | Informational: what Google/ROM used (12.4 → AOSP clang r563880c / LLVM 21) |
+
+Verification for 12.4 lives in `reports/evidence/marble-12.4-stock-config.txt` (the device's own
+`/proc/config.gz`). After a CI build, diff the produced `out/.config` against it: apart from the
+intentional Droidspaces/KernelSU deltas, the two should be near-identical.
 
 ## Pin refresh
 

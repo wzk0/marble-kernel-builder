@@ -256,15 +256,17 @@ flowchart LR
 
 | Input | Default | Description |
 |---|---|---|
-| `build_source_melt` | `true` | Source: Melt (Stock HyperOS) |
+| `build_source_melt` | `false` | Source: Melt (Stock HyperOS) |
 | `build_source_lineageos` | `false` | Source: LineageOS (LOS ROMs) |
-| `build_source_evolution_x` | `false` | Source: Evolution-X (LOS ROMs) |
+| `build_source_evolution_x` | **`true`** | Source: Evolution-X (LOS ROMs) — the default target |
 | `build_source_aosp_pablo` | `false` | Source: aosp-pablo (LOS ROMs) |
 | `build_source_pa_gr` | `false` | Source: pa-gr (LOS ROMs) |
 | `build_source_all` | `false` | Build ALL 5 kernel sources at once |
-| `source_ref` | *(empty)* | Override branch/tag/commit (empty = preset defaults) |
+| `source_ref` | *(empty)* | Override branch/tag/commit (empty = preset defaults / ROM version pin) |
+| `evolution_x_version` | *(empty)* | Evolution X version; empty = `default` in `config/evolution-x-versions.json`. Resolves to an exact kernel commit + fragment set |
+| `enable_droidspaces` | **`true`** | Apply Droidspaces GKI kABI patches and enable namespaces / IPC / devtmpfs |
 | `build_none` | `false` | Baseline no-root kernel |
-| `build_kernelsu` | `false` | KernelSU (no SUSFS) |
+| `build_kernelsu` | **`true`** | KernelSU (no SUSFS) — the default root manager |
 | `build_kernelsu_next` | `false` | KernelSU-Next |
 | `build_sukisu_ultra` | `false` | SukiSU Ultra |
 | `build_resukisu` | `false` | ReSukiSU |
@@ -275,7 +277,7 @@ flowchart LR
 | `lto` | `thin` | `none` · `thin` · `full` |
 | `build_scope` | `image-only` | `image-only` or `full` |
 | `enable_ccache` | `true` | Object cache + ThinLTO cache when `lto=thin` |
-| `create_draft_release` | `false` | ZIP-only draft release after a fully green run |
+| `create_draft_release` | **`true`** | ZIP-only draft release after a fully green run |
 
 Ticking several `build_*` boxes fans out one parallel job per manager with `fail-fast: false`, so one failure does not cancel the rest.
 
@@ -354,7 +356,14 @@ AK3_marble_MELT_melt_noroot_r124.zip
 
 <br/>
 
-Tick **`create_draft_release`** on the same run. The release job is gated on *every* selected build **and** the combined summary succeeding, then creates draft tag `marble-<kernel_source>-r<run>`.
+The release job is gated on *every* selected build **and** the combined summary succeeding. The draft tag/title are
+derived **from the build artifacts** (`build-info.txt`), not from workflow inputs — `prepare-promoted-release.sh`
+writes `release-metadata.env` and the release step consumes it:
+
+```
+tag    marble-<source>[-<rom-version>][-droidspaces]-r<run>     e.g. marble-evolution-x-12.4-droidspaces-r121
+title  <Display> <rom-version> · <manager(s)>[ · Droidspaces] · r<run>
+```
 
 - Assets are **flashable ZIPs only** — checksums and metadata stay in Actions artifacts.
 - Checksums are re-verified by `prepare-promoted-release.sh` before anything is attached.
